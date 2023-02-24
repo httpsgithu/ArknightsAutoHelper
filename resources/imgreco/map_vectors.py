@@ -6,6 +6,7 @@ map_anchors = {}
 ep2region: Dict[int, int] = {}
 region2ep: Dict[int, List[int]] = {}
 stage_maps_linear: Dict[str, List[str]] = {}
+mainline_stages = set()
 _invalid_stages = []
 
 def vec(*scalars, dtype=numpy.int32):
@@ -79,26 +80,14 @@ def initialize():
 
 
     # materials
-    material1 = vec(0, 0)
-    material2 = material1 + vec(277, -50)
-    material3 = material1 + vec(477, -165)
-    material4 = material1 + vec(643, -279)
-    material5 = material1 + vec(743, -394)
     for prefix in ['LS', 'AP', 'CA', 'CE', 'SK']:
-        stage_maps[prefix] = {prefix + '-1': material1, prefix + '-2': material2, prefix + '-3': material3,
-                              prefix + '-4': material4, prefix + '-5': material5}
-        map_anchors[prefix] = [prefix + '-1']
-        stage_maps_linear[prefix] = stage_maps[prefix].keys()
+        stage_maps_linear[prefix] = [f'{prefix}-{i}' for i in range(1, 6)]
+    stage_maps_linear['CE'].append('CE-6')
+    stage_maps_linear['LS'].append('LS-6')
 
     # socs
     for infix in 'ABCD':
-        map_anchors['PR-' + infix] = ['PR-%s-1' % infix]
         stage_maps_linear['PR-%s' % infix] = ['PR-%s-1' % infix, 'PR-%s-2' % infix]
-    vec0 = vec(0, 0)
-    stage_maps['PR-A'] = {'PR-A-1': vec0, 'PR-A-2': vec(401, -188)}
-    stage_maps['PR-B'] = {'PR-B-1': vec0, 'PR-B-2': vec(456, -197)}
-    stage_maps['PR-C'] = {'PR-C-1': vec0, 'PR-C-2': vec(445, -154)}
-    stage_maps['PR-D'] = {'PR-D-1': vec0, 'PR-D-2': vec(426, -173)}
 
     stage_maps_linear['ep00'] = ['0-1', 'TR-1', '0-2', 'TR-2', '0-3', 'TR-3', '0-4', 'TR-4', '0-5', '0-6', 'TR-5',
                                  '0-7', 'TR-6', '0-8', '0-9', 'TR-7', '0-10', '0-11']
@@ -123,11 +112,19 @@ def initialize():
                                  'R8-11', 'M8-8', 'EG-3', 'JT8-1', 'JT8-2', 'JT8-3', 'EG-4', 'END8-1', 'EG-5']
     stage_maps_linear['ep09'] = ['9-1', '9-2', '9-3', '9-4', '9-5', '9-6', 'TR-19', '9-7', '9-8', '9-9', '9-10', '9-11',
                                  '9-12', '9-13', 'S9-1', '9-14', '9-15', '9-16', '9-17', '9-18', '9-19']
-
+    stage_maps_linear['ep10'] = ['10-1', '10-2', '10-3', 'TR-20', '10-4', '10-5', '10-6', '10-7', '10-8', '10-9',
+                                 '10-10', '10-11', '10-12', '10-13', '10-14', '10-15', '10-16', '10-17',
+                                 '10-18', '10-19']
+    stage_maps_linear['ep11'] = ['11-1', '11-2', '11-3', '11-4', '11-5', '11-6', 'TR-21', '11-7', '11-8', '11-9',
+                                 '11-10', '11-11', '11-12', '11-13', '11-14', '11-15', '11-16', '11-17',
+                                 '11-18', '11-19', '11-20', '11-21']
     global _invalid_stages
     _invalid_stages = ['1-2', '1-11', '5-11', '6-13', '6-17', '6-18', '7-1', '7-7', '7-19', '7-20', 'M8-1', 'M8-2',
                        'M8-3', 'M8-4', 'M8-5', 'EG-1', 'EG-2', 'EG-3', 'JT8-1', 'EG-4', 'END8-1', 'EG-5',
                        'H6-1', 'H6-4']
+    for k in stage_maps_linear:
+        if k.startswith('ep'):
+            mainline_stages.update(stage_maps_linear[k])
     tmp = []
     for i in range(4):
         ep2region[i] = 0
@@ -139,7 +136,7 @@ def initialize():
         tmp.append(i)
     region2ep[1] = tmp
     tmp = []
-    for i in range(9, 10):
+    for i in range(9, 12):
         ep2region[i] = 2
         tmp.append(i)
     region2ep[2] = tmp

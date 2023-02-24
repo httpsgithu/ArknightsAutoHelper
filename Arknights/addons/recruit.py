@@ -1,18 +1,19 @@
-from automator import AddonBase
-class RecruitAddon(AddonBase):
-    def on_attach(self) -> None:
-        self.register_cli_command('recruit', self.cli_recruit, self.cli_recruit.__doc__)
+from automator import AddonBase, cli_command
 
+class RecruitAddon(AddonBase):
     def recruit(self):
         import imgreco.recruit
         from . import recruit_calc
         self.logger.info('识别招募标签')
-        tags = imgreco.recruit.get_recruit_tags(self.device.screenshot())
+        tags = imgreco.recruit.get_recruit_tags(self.screenshot())
         self.logger.info('可选标签：%s', ' '.join(tags))
+        if len(tags) != 5:
+            self.logger.warning('识别到的标签数量异常，一共识别了%d个标签', len(tags))
         result = recruit_calc.calculate(tags)
         self.logger.debug('计算结果：%s', repr(result))
         return result
 
+    @cli_command('recruit')
     def cli_recruit(self, argv):
         """
         recruit [tags ...]

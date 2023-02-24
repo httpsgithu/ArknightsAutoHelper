@@ -38,6 +38,7 @@ def find_chromium():
     return None
 
 def check_webview2():
+    return None
     import os
     if os.name != 'nt':
         return None
@@ -67,10 +68,10 @@ class WebHostWebView:
     def start(self, url, width=None, height=None):
         if [width, height].count(None) == 1:
             raise ValueError("width and height")
-        import config
+        import app
         import multiprocessing
         from . import webview_launcher
-        self.p = multiprocessing.Process(target=webview_launcher.launch, args=[url, width, height, config.get('webgui/webview_backend', None)])
+        self.p = multiprocessing.Process(target=webview_launcher.launch, args=[url, width, height, app.get('webgui/webview_backend', None)])
         self.p.start()
         self.wait_handle = self.p.join
 
@@ -82,9 +83,9 @@ class WebHostChromePWA:
             raise ValueError("width and height")
         import subprocess
         import os
-        import config
-        data_dir = os.path.join(config.cache_path, "akhelper-gui-datadir")
-        cmd = [self.exe, '--chrome-frame', '--app='+url, '--user-data-dir='+data_dir, '--disable-plugins', '--disable-extensions']
+        import app
+        data_dir = app.cache_path.joinpath("akhelper-gui-datadir")
+        cmd = [self.exe, '--chrome-frame', '--app='+url, '--user-data-dir='+os.fspath(data_dir), '--disable-plugins', '--disable-extensions']
         if width is not None:
             cmd.append('--window-size=%d,%d' % (width, height))
         subprocess.Popen(cmd)
@@ -124,18 +125,19 @@ def auto_host():
         return WebHostBrowser()
 
 def get_host():
-    import config
-    name = config.get('webgui/host', None)
+    import app
+    name = app.get('webgui/host', None)
     if name is None:
         return auto_host()
     elif name == 'chrome_pwa':
-        exe = config.get('webgui/chrome_bin', None)
+        exe = app.get('webgui/chrome_bin', None)
         if exe is None:
             exe = find_chromium()
         if exe is None:
             raise RuntimeError("no compatible browser executable found")
         return WebHostChromePWA(exe)
     elif name == 'webview':
+        return auto_host()
         return WebHostWebView()
     else:
         raise KeyError(name)

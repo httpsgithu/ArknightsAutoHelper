@@ -1,3 +1,6 @@
+import util.early_logs
+import util.unfuck_https_proxy
+
 import logging
 import sys
 import threading
@@ -5,18 +8,44 @@ import multiprocessing
 import queue as threading_Queue
 
 import Arknights.helper
-import config
-import connector
-from connector.ADBConnector import ADBConnector, ensure_adb_alive
+import app
+from automator.control.ADBController import ADBController
 from util.excutil import format_exception
 from typing import Mapping
 
-config.background = True
+app.background = True
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.StreamHandler())
 logger.propagate = False
-config.enable_logging()
+
+class PendingHandler(logging.Handler):
+    terminator = '\n'
+
+    def __init__(self):
+        super().__init__()
+        self.records = []
+        self.output = None
+
+    def attach(self, output: logging.Handler):
+        self.output = output
+        for record in self.records:
+            self.output.emit(record)
+        self.records.clear()
+
+    def flush(self):
+        if self.output is not None:
+            self.output.flush()
+
+    def emit(self, record: logging.LogRecord):
+        if self.output is None:
+            self.records.append(record)
+        else:
+            self.output.emit(record)
+
+loghandler = PendingHandler()
+loghandler.setLevel(logging.INFO)
+app.init([loghandler])
 
 class WebHandler(logging.Handler):
     terminator = '\n'
@@ -61,21 +90,20 @@ class WorkerThread(threading.Thread):
         }
 
     def notify_availiable_devices(self):
-        devices = ADBConnector.available_devices()
-        devices = ["adb:"+x[0] for x in devices]
-        self.notify("web:availiable-devices", devices)
+        from automator.control.targets import enum_targets
+        devices = enum_targets()
+        self.devices = devices
+        self.notify("web:availiable-devices", [str(x) for x in devices])
 
     # threading.Thread
     def run(self):
         print("starting worker thread")
-        loghandler = WebHandler(self.output)
-        loghandler.setLevel(logging.INFO)
-        logging.root.addHandler(loghandler)
-        version = config.version
-        if config.get_instance_id() != 0:
-            version += f" (instance {config.get_instance_id()})"
+        realhandler = WebHandler(self.output)
+        loghandler.attach(realhandler)
+        version = app.version
+        if app.get_instance_id() != 0:
+            version += f" (instance {app.get_instance_id()})"
         self.notify("web:version", version)
-        ensure_adb_alive()
         self.notify_availiable_devices()
         self.helper = Arknights.helper.ArknightsHelper(frontend=self)
         while True:
@@ -113,8 +141,9 @@ class WorkerThread(threading.Thread):
         logger.info("sending notify %s %r", name, value)
         self.output.put(dict(type="notify", name=name, value=value))
     def request_device_connector(self):
+        from automator.control.targets import auto_connect
         try:
-            return connector.auto_connect()
+            return auto_connect(preference=app.config.device.adb_always_use_device)
         except:
             self.notify_availiable_devices()
             self.notify('web:show-devices')
@@ -139,12 +168,19 @@ class WorkerThread(threading.Thread):
     def web_connect(self, dev:str):
         print(dev.split(':', 1))
         connector_type, cookie = dev.split(':', 1)
-        if connector_type != 'adb':
+        if connector_type == 'list':
+            record = self.devices[int(cookie)]
+            new_connector = record.create_controller()
+        elif connector_type == 'adb':
+            from automator.control.adb.targets import get_target_from_adb_serial
+            new_connector = get_target_from_adb_serial(cookie).create_controller()
+        else:
             raise KeyError("unknown connector type " + connector_type)
-        new_connector = ADBConnector(cookie)
         connector_str = str(new_connector)
-        self.helper.connect_device(new_connector)
-    
+        old_controller = self.helper.connect_device(new_connector)
+        if old_controller is not None:
+            old_controller.close()
+
 
     def set_max_refill_count(self, count):
         self.helper.addon('CombatAddon').refill_count = 0
